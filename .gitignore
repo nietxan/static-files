@@ -1,0 +1,22 @@
+# Binaries
+/static-files
+*.exe
+*.out
+
+# Test / coverage
+*.test
+coverage.out
+
+# Go workspace
+go.work
+go.work.sum
+
+# Env / secrets
+.env
+.env.*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

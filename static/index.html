@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>static-files</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#272b34; --fg:#e6e8eb; --muted:#8b93a1; --accent:#4f9cf9; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  header .bucket { color:var(--muted); font-size:13px; }
+  main { max-width:1000px; margin:0 auto; padding:20px; }
+  #drop { border:1.5px dashed var(--line); border-radius:8px; padding:22px; text-align:center; color:var(--muted); cursor:pointer; transition:.15s; margin-bottom:18px; }
+  #drop.hot { border-color:var(--accent); color:var(--fg); background:var(--panel); }
+  #crumbs { margin-bottom:10px; color:var(--muted); }
+  #crumbs a { color:var(--accent); text-decoration:none; cursor:pointer; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.size, td.actions { white-space:nowrap; }
+  tr.row:hover { background:var(--panel); }
+  a.name { color:var(--fg); text-decoration:none; }
+  a.folder { color:var(--accent); text-decoration:none; cursor:pointer; }
+  button.copy { background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px; }
+  button.copy:hover { border-color:var(--accent); }
+  button.copy.done { color:#5ac37d; border-color:#5ac37d; }
+  .muted { color:var(--muted); }
+  #toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--panel); border:1px solid var(--line); padding:9px 16px; border-radius:8px; opacity:0; transition:.2s; pointer-events:none; }
+  #toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>static-files</h1>
+  <span class="bucket" id="bucket"></span>
+</header>
+<main>
+  <div id="drop">Drop files here or click to upload</div>
+  <input type="file" id="file" multiple hidden>
+  <div id="crumbs"></div>
+  <table>
+    <thead><tr><th>Name</th><th>Size</th><th>Public link</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <p id="empty" class="muted" hidden>Empty.</p>
+</main>
+<div id="toast"></div>
+
+<script>
+let prefix = "";
+
+const $ = (id) => document.getElementById(id);
+const fmtSize = (n) => {
+  if (n < 1024) return n + " B";
+  const u = ["KB","MB","GB","TB"]; let i=-1;
+  do { n/=1024; i++; } while (n>=1024 && i<u.length-1);
+  return n.toFixed(1) + " " + u[i];
+};
+const toast = (msg) => { const t=$("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1600); };
+
+async function load() {
+  const r = await fetch("/api/list?prefix=" + encodeURIComponent(prefix));
+  if (!r.ok) { toast("list failed: " + (await r.json()).error); return; }
+  const d = await r.json();
+  prefix = d.prefix;
+  renderCrumbs();
+  const rows = $("rows"); rows.innerHTML = "";
+
+  if (prefix) {
+    const parent = prefix.replace(/[^/]+\/$/, "");
+    rows.insertAdjacentHTML("beforeend",
+      `<tr class="row"><td colspan="3"><a class="folder" data-p="${esc(parent)}">.. up</a></td></tr>`);
+  }
+  for (const f of d.folders) {
+    const name = f.slice(prefix.length).replace(/\/$/, "");
+    rows.insertAdjacentHTML("beforeend",
+      `<tr class="row"><td><a class="folder" data-p="${esc(f)}">📁 ${esc(name)}/</a></td><td class="muted">—</td><td></td></tr>`);
+  }
+  for (const o of d.objects) {
+    rows.insertAdjacentHTML("beforeend",
+      `<tr class="row">
+        <td><a class="name" href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a></td>
+        <td class="size muted">${fmtSize(o.size)}</td>
+        <td class="actions"><button class="copy" data-url="${esc(o.url)}">Copy link</button></td>
+      </tr>`);
+  }
+  $("empty").hidden = d.folders.length + d.objects.length > 0;
+}
+
+function renderCrumbs() {
+  const c = $("crumbs");
+  const parts = prefix.split("/").filter(Boolean);
+  let acc = "";
+  let html = `<a data-p="">root</a>`;
+  for (const p of parts) { acc += p + "/"; html += ` / <a data-p="${esc(acc)}">${esc(p)}</a>`; }
+  c.innerHTML = html;
+}
+
+const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+document.addEventListener("click", (e) => {
+  const f = e.target.closest("a.folder, #crumbs a");
+  if (f) { e.preventDefault(); prefix = f.dataset.p || ""; load(); return; }
+  const b = e.target.closest("button.copy");
+  if (b) {
+    navigator.clipboard.writeText(b.dataset.url).then(() => {
+      b.textContent = "Copied"; b.classList.add("done");
+      setTimeout(() => { b.textContent = "Copy link"; b.classList.remove("done"); }, 1200);
+    });
+  }
+});
+
+// ---- upload ----
+const drop = $("drop"), fileInput = $("file");
+drop.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => upload(fileInput.files));
+["dragover","dragenter"].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("hot"); }));
+["dragleave","drop"].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("hot"); }));
+drop.addEventListener("drop", (e) => upload(e.dataTransfer.files));
+
+async function upload(files) {
+  if (!files.length) return;
+  const fd = new FormData();
+  for (const f of files) fd.append("files", f);
+  drop.textContent = `Uploading ${files.length} file(s)…`;
+  const r = await fetch("/api/upload?prefix=" + encodeURIComponent(prefix), { method:"POST", body:fd });
+  drop.textContent = "Drop files here or click to upload";
+  if (!r.ok) { toast("upload failed: " + (await r.json()).error); return; }
+  const d = await r.json();
+  toast(`Uploaded ${d.uploaded.length} file(s)`);
+  load();
+}
+
+$("bucket").textContent = location.host;
+load();
+</script>
+</body>
+</html>
