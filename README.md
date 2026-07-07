@@ -11,14 +11,12 @@ and had reverse-proxy quirks.
 
 ## Config (env)
 
-| Var | Default | Notes |
-|-----|---------|-------|
-| `BUCKET` | — (required) | bucket name, e.g. `example-static` |
-| `AWS_REGION` | `us-east-1` | |
-| `PUBLIC_BASE_URL` | `https://<bucket>.s3.<region>.amazonaws.com` | override if fronted by CloudFront |
-| `LISTEN_ADDR` | `:8334` | |
-| `ROOT_PREFIX` | `` (whole bucket) | confine the UI to a sub-path; users can't escape it |
-| `MAX_UPLOAD_MB` | `512` | per-request upload cap |
+- **`BUCKET`** (required) — bucket name, e.g. `example-static`.
+- **`AWS_REGION`** — defaults to `us-east-1`.
+- **`PUBLIC_BASE_URL`** — base for public links. Defaults to `https://<bucket>.s3.<region>.amazonaws.com`; override if fronted by CloudFront.
+- **`LISTEN_ADDR`** — listen address, defaults to `:8334`.
+- **`ROOT_PREFIX`** — confine the UI to a sub-path (users can't escape it). Defaults to empty = whole bucket.
+- **`MAX_UPLOAD_MB`** — per-request upload cap, defaults to `512`.
 
 ## API
 
